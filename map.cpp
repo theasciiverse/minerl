@@ -105,8 +105,15 @@ void Map::generate()
         if (y == 13 || y == 14) {
           tiles[x][y].seen = true;
         }
-        if (one_in(10)) {
+        // Asciiverse: the ground hardens into stone with depth, and the
+        // claim ends in bedrock at the sides and the bottom.
+        int stone_chance = (y < 40 ? 0 : (y - 40) * 100 / 50);
+        if (x == 0 || x == 119 || y >= 118) {
+          tiles[x][y].set_id(T_bedrock);
+        } else if (one_in(10)) {
           tiles[x][y].set_id(T_boulder);
+        } else if (rng(1, 100) <= stone_chance) {
+          tiles[x][y].set_id(T_stone);
         } else {
           tiles[x][y].set_id(T_dirt);
         }
@@ -139,6 +146,21 @@ void Map::generate()
     add_vein(T_copper, x, y, rng(4, 7));
   }
 
+  // Asciiverse: richer ore further down
+  struct Deep_vein { Tile_id id; int count, ymin, ymax, smin, smax; };
+  Deep_vein deep[] = {
+    { T_silver,  40, 45,  80, 3, 6 },
+    { T_gold,    30, 60, 100, 3, 5 },
+    { T_ruby,    20, 80, 112, 2, 4 },
+    { T_diamond, 14, 95, 115, 2, 3 }
+  };
+  for (int d = 0; d < 4; d++) {
+    for (int i = 0; i < deep[d].count; i++) {
+      add_vein(deep[d].id, rng(5, 114), rng(deep[d].ymin, deep[d].ymax),
+               rng(deep[d].smin, deep[d].smax));
+    }
+  }
+
   int empty_veins = 5 * rng(20, 30);
   int empty_y = 18;
   for (int i = 0; i < empty_veins; i++) {
@@ -149,6 +171,18 @@ void Map::generate()
     add_vein(T_empty, x, empty_y, rng(3, 12));
   }
 
+  // Asciiverse: the Heartstone, a single great stone, deep at the bottom
+  // of the claim, and a pocket of cave around it.
+  heart_x = rng(20, 100);
+  heart_y = rng(111, 114);
+  for (int x = heart_x - 3; x <= heart_x + 3; x++) {
+    for (int y = heart_y - 2; y <= heart_y + 1; y++) {
+      if (y < 118) {
+        tiles[x][y].set_id(T_empty);
+      }
+    }
+  }
+  tiles[heart_x][heart_y].set_id(T_heartstone);
 }
 
 void Map::add_vein(Tile_id type, int x, int y, int size)
@@ -163,7 +197,7 @@ void Map::add_vein(Tile_id type, int x, int y, int size)
       case 4: y--;  break;
     }
     Tile_id id = get_tile_id(x, y);
-    if (id == T_dirt) {
+    if (id == T_dirt || (id == T_stone && type != T_empty)) {
       set_tile(x, y, type);
     } else if (id != T_boulder && !one_in(4)) {
       i--;  // 75% of the time, don't use up part of our size
@@ -233,18 +267,19 @@ void Map::draw(Window* w, Player* pl)
       w->putglyph(x, y, monsters[i].type->sym);
     }
   }
-// Finally, draw the message, if any...
-  while (!messages.empty()) {
-    w->putstr(1, 0, c_yellow, c_black, messages[0]);
-    messages.erase(messages.begin());
-    if (!messages.empty()) {
-      w->putstr(1, 1, c_black, c_red, "More... (Press Spacebar)");
-    }
-    long ch;
-    while (ch != ' ') {
-      ch = input();
+// Draw the lit dynamite
+  for (int i = 0; i < bombs.size(); i++) {
+    int x = bombs[i].x - x_min, y = bombs[i].y - y_min;
+    if (x >= 0 && y >= 0 && x < xsize && y < ysize) {
+      w->putglyph(x, y, glyph('0' + bombs[i].fuse, c_yellow, c_red));
     }
   }
+// Asciiverse: the last two messages, without stopping the game
+  int first = (messages.size() > 2 ? messages.size() - 2 : 0);
+  for (int i = first; i < messages.size(); i++) {
+    w->putstr(1, i - first, c_yellow, c_black, messages[i]);
+  }
+  messages.clear();
 }
 
 void Map::set_tile(int x, int y, Tile_id tile)
@@ -274,12 +309,10 @@ void Map::add_support(int x, int y)
 void Map::add_falling(int x, int y)
 {
   if (get_tile_id(x, y) != T_boulder) {
-debugmsg("Not a boulder");
     return; // Oops
   }
   for (int i = 0; i < falling.size(); i++) {
     if (falling[i].x == x && falling[i].y == y) {
-debugmsg("Already falling");
       return; // It's already falling
     }
   }
@@ -318,6 +351,11 @@ void Map::process_falling(Player& pl)
       set_tile(falling[i].x, y, T_boulder);
       if (player_blocked) {
         post.push_back(Point(falling[i].x, y));
+        // Asciiverse: a boulder coming down on you hurts
+        if (falling[i].x == pl.posx && y + 1 == pl.posy) {
+          add_msg("A boulder crashes down on you!");
+          pl.take_damage(20, "a falling boulder");
+        }
       }
       falling.erase(falling.begin() + i);
       i--;
@@ -333,25 +371,124 @@ void Map::process_falling(Player& pl)
 
 void Map::spawn_monsters(Player &pl)
 {
+// Asciiverse: monsters come out of the caves near you, and the deeper you
+// are the worse they get: cockroaches and worms near the top, termites
+// further down, goblins in the deep.
+  if (monsters.size() >= 24) {
+    return;
+  }
   std::vector<Point> valid_spawns;
   int num_monsters = rng(1, 2);
-  for (int x = 0; x < 120; x++) {
-    for (int y = 15; y < pl.deepest_point; y++) {
-      if (get_tile_id(x, y) == T_empty) {
+  for (int x = pl.posx - 30; x <= pl.posx + 30; x++) {
+    for (int y = pl.posy - 15; y <= pl.posy + 15; y++) {
+      if (y > 14 && y <= pl.deepest_point && get_tile_id(x, y) == T_empty &&
+          rl_dist(x, y, pl.posx, pl.posy) > 6) {
         valid_spawns.push_back( Point(x, y) );
       }
     }
   }
 
   for (int i = 0; !valid_spawns.empty() && i < num_monsters; i++) {
-    Monster tmp;
-    Monster_id mid = Monster_id( rng(M_null + 1, M_max - 1) );
-    tmp.set_type( mid, &(MONSTERS[mid]) );
     int index = rng(0, valid_spawns.size() - 1);
+    int depth = valid_spawns[index].y;
+    std::vector<Monster_id> pool;
+    pool.push_back(M_cockroach);
+    pool.push_back(M_worm);
+    if (depth > 35) {
+      pool.push_back(M_termite);
+      pool.push_back(M_worm);
+    }
+    if (depth > 60) {
+      pool.push_back(M_goblin);
+    }
+    if (depth > 90) {
+      pool.push_back(M_goblin);
+      pool.push_back(M_goblin);
+    }
+    Monster tmp;
+    Monster_id mid = pool[ rng(0, pool.size() - 1) ];
+    tmp.set_type( mid, &(MONSTERS[mid]) );
     tmp.posx = valid_spawns[index].x;
     tmp.posy = valid_spawns[index].y;
     monsters.push_back(tmp);
   }
+}
+
+void Map::add_bomb(int x, int y)
+{
+  Bomb b;
+  b.x = x;
+  b.y = y;
+  b.fuse = 3;
+  bombs.push_back(b);
+}
+
+void Map::process_bombs(Player& pl)
+{
+  for (int i = 0; i < bombs.size(); i++) {
+    bombs[i].fuse--;
+    if (bombs[i].fuse <= 0) {
+      int x = bombs[i].x, y = bombs[i].y;
+      bombs.erase(bombs.begin() + i);
+      i--;
+      explode(x, y, pl);
+    }
+  }
+}
+
+void Map::explode(int bx, int by, Player& pl)
+{
+  add_msg("BOOM!");
+  for (int x = bx - 2; x <= bx + 2; x++) {
+    for (int y = by - 2; y <= by + 2; y++) {
+      if (y <= 12 || rl_dist(x, y, bx, by) > 2) {
+        continue;
+      }
+      Tile_id id = get_tile_id(x, y);
+      if (id == T_bedrock || id == T_heartstone || id == T_null) {
+        continue;
+      }
+      set_tile(x, y, T_empty);
+      get_tile(x, y)->seen = true;
+    }
+  }
+  for (int i = 0; i < monsters.size(); i++) {
+    if (rl_dist(monsters[i].posx, monsters[i].posy, bx, by) <= 2) {
+      monsters[i].take_damage(30);
+      if (monsters[i].dead) {
+        pl.kills++;
+      }
+    }
+  }
+  if (rl_dist(pl.posx, pl.posy, bx, by) <= 2) {
+    add_msg("You are caught in the blast!");
+    pl.take_damage(35, "your own dynamite");
+  }
+// Anything resting on the blasted ground comes down
+  for (int x = bx - 2; x <= bx + 2; x++) {
+    int y = by - 3;
+    while (get_tile_id(x, y) == T_boulder) {
+      add_falling(x, y);
+      y--;
+    }
+  }
+}
+
+int Map::add_rope(int x, int y, int ropes)
+{
+  int used = 0;
+  while (used < ropes && y < 118) {
+    Tile_id id = get_tile_id(x, y);
+    if (id != T_empty && id != T_rope && id != T_entrance) {
+      break;
+    }
+    if (id == T_empty) {
+      set_tile(x, y, T_rope);
+      used++;
+    }
+    y++;
+  }
+  return used;
 }
 
 void Map::move_monsters(Player &pl)
@@ -619,4 +756,82 @@ int Map::pathing_cost(Monster_id type, int curx, int cury, int x, int y)
     ret++;  // Non-vertical moves always take one turn.
   }
   return ret;
+}
+
+// Asciiverse: the whole claim as text, one tile per line group
+void Map::save(std::ostream& out)
+{
+  out << "map " << heart_x << " " << heart_y << " " << tiles.size() << "\n";
+  for (int x = 0; x < tiles.size(); x++) {
+    for (int y = 0; y < tiles[x].size(); y++) {
+      Tile& t = tiles[x][y];
+      out << int(t.id) << " " << t.hp << " " << (t.seen ? 1 : 0) << " "
+          << int(t.sym.symbol) << " " << int(t.sym.fg) << "\n";
+    }
+  }
+  out << monsters.size() << "\n";
+  for (int i = 0; i < monsters.size(); i++) {
+    out << int(monsters[i].id) << " " << monsters[i].hp << " "
+        << monsters[i].posx << " " << monsters[i].posy << "\n";
+  }
+  out << bombs.size() << "\n";
+  for (int i = 0; i < bombs.size(); i++) {
+    out << bombs[i].x << " " << bombs[i].y << " " << bombs[i].fuse << "\n";
+  }
+  out << falling.size() << "\n";
+  for (int i = 0; i < falling.size(); i++) {
+    out << falling[i].x << " " << falling[i].y << "\n";
+  }
+}
+
+bool Map::load(std::istream& in)
+{
+  std::string tag;
+  int n;
+  if (!(in >> tag >> heart_x >> heart_y >> n) || tag != "map" || n != 120) {
+    return false;
+  }
+  reset_null_tile();
+  tiles.assign(120, std::vector<Tile>(120, null_tile));
+  for (int x = 0; x < 120; x++) {
+    for (int y = 0; y < 120; y++) {
+      int id, hp, seen, sym, fg;
+      if (!(in >> id >> hp >> seen >> sym >> fg)) {
+        return false;
+      }
+      Tile& t = tiles[x][y];
+      t.set_id(Tile_id(id));
+      t.hp = hp;
+      t.seen = (seen != 0);
+      t.sym.symbol = sym;
+      t.sym.fg = nc_color(fg);
+    }
+  }
+  monsters.clear();
+  in >> n;
+  for (int i = 0; i < n; i++) {
+    int id, hp, x, y;
+    in >> id >> hp >> x >> y;
+    Monster m;
+    m.set_type(Monster_id(id), &(MONSTERS[id]));
+    m.hp = hp;
+    m.posx = x;
+    m.posy = y;
+    monsters.push_back(m);
+  }
+  bombs.clear();
+  in >> n;
+  for (int i = 0; i < n; i++) {
+    Bomb b;
+    in >> b.x >> b.y >> b.fuse;
+    bombs.push_back(b);
+  }
+  falling.clear();
+  in >> n;
+  for (int i = 0; i < n; i++) {
+    int x, y;
+    in >> x >> y;
+    falling.push_back(Point(x, y));
+  }
+  return !in.fail();
 }

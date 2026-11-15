@@ -38,6 +38,25 @@ void init_data()
   TILES[T_copper]   = Tile_datum(c_ltred,   c_brown,  true,  true, 10, 0, 14,
                                  "#", "copper");
 
+  // Asciiverse: harder ground and richer ore further down, and the
+  // Heartstone at the bottom of the claim
+  TILES[T_stone]    = Tile_datum(c_dkgray,  c_ltgray, true,  false, 9, 0, 0,
+                                 "  %:;", "stone");
+  TILES[T_silver]   = Tile_datum(c_white,   c_ltgray, true,  true, 14, 0, 25,
+                                 "$", "silver");
+  TILES[T_gold]     = Tile_datum(c_yellow,  c_ltgray, true,  true, 18, 0, 45,
+                                 "$", "gold");
+  TILES[T_ruby]     = Tile_datum(c_ltred,   c_dkgray, true,  true, 24, 0, 80,
+                                 "*", "ruby");
+  TILES[T_diamond]  = Tile_datum(c_ltcyan,  c_dkgray, true,  true, 30, 0, 140,
+                                 "*", "diamond");
+  TILES[T_heartstone] = Tile_datum(c_pink,  c_magenta, true, true, 40, 0, 0,
+                                 "@", "Heartstone");
+  TILES[T_bedrock]  = Tile_datum(c_dkgray,  c_black,  true,  true,  0, 0, 0,
+                                 "%", "bedrock");
+  TILES[T_rope]     = Tile_datum(c_brown,   c_black,  false, false, 0, 1, 0,
+                                 "|", "rope");
+
   COST[S_auger]     = 500;
   AMT [S_auger]     =   1;
 
@@ -50,6 +69,12 @@ void init_data()
   COST[S_supports]  =   7;
   AMT [S_supports]  =   1;
 
+  COST[S_bolts]     =   4;
+  AMT [S_bolts]     =   1;
+
+  COST[S_dynamite]  =  30;
+  AMT [S_dynamite]  =   1;
+
   MONSTERS[M_worm]        =
     Monster_type(8, 1, 2, 1, 3, false, false, true, false, 'w', c_ltred,
                  0);
@@ -59,7 +84,13 @@ void init_data()
                  0);
 
   MONSTERS[M_termite]     =
-    Monster_type(3, 1, 5, 1, 6, false, true, true, false, 'c', c_red,
-                 T_ladder, T_support, T_ladder_and_support, 0);
+    Monster_type(3, 1, 5, 1, 6, false, true, true, false, 't', c_red,
+                 T_ladder, T_support, T_ladder_and_support, T_rope, 0);
+
+  // Asciiverse: goblins dig with tools and carry off the ore they find
+  MONSTERS[M_goblin]      =
+    Monster_type(14, 3, 2, 4, 8, true, true, true, false, 'g', c_green,
+                 T_coal, T_iron, T_copper, T_silver, T_gold, T_ruby,
+                 T_diamond, 0);
 
 }

@@ -71,7 +71,8 @@ void Monster::move(Map* map, Player *pl, int movex, int movey)
   }
 
   if (pl && pl->posx == movex && pl->posy == movey) {
-    pl->take_damage( type->damage );
+    map->add_msg("The " + monster_name(id) + " bites you!");
+    pl->take_damage( type->damage, "a " + monster_name(id) );
     return;
   }
 
@@ -216,4 +217,16 @@ void Monster::path_to_random_target(Map* map)
     maxy = 119;
   }
   path = map->path(id, posx, posy, rng(minx, maxx), rng(miny, maxy));
+}
+
+// Asciiverse: names for the messages
+std::string monster_name(Monster_id id)
+{
+  switch (id) {
+    case M_worm:      return "worm";
+    case M_cockroach: return "cockroach";
+    case M_termite:   return "termite";
+    case M_goblin:    return "goblin";
+    default:          return "thing";
+  }
 }

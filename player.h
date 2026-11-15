@@ -13,6 +13,8 @@ enum Supplies
   S_ladders,
   S_rope,
   S_supports,
+  S_bolts,     // Asciiverse: crossbow bolts and dynamite, as Whales planned
+  S_dynamite,
   S_max
 };
 
@@ -87,11 +89,15 @@ public:
 // Returns true if we had enough
   bool use_stamina(int amount);
 // Returns true if we died!
-  bool take_damage(int amount);
+  bool take_damage(int amount, std::string cause = "");
+  bool dead();  // Asciiverse
   void add_finding(Tile_id id);
 
   int posx, posy;
   int deepest_point;
+  bool has_heart;     // Asciiverse: carrying the Heartstone
+  int kills;          // Asciiverse: for the end of a run
+  std::string last_hurt;  // Asciiverse: what hurt you last
   int max_stamina;
 
 // "Permanent" values

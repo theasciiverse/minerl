@@ -6,6 +6,7 @@
 #include "geometry.h"
 #include "monster.h"
 #include <vector>
+#include <iostream>
 
 class Player;
 
@@ -45,6 +46,19 @@ public:
   void add_falling(int x, int y);
 
   void add_msg(std::string message);
+  void clear_msgs() { messages.clear(); }
+
+// Asciiverse: dynamite with a short fuse, and rope let down a shaft
+  struct Bomb { int x, y, fuse; };
+  std::vector<Bomb> bombs;
+  void add_bomb(int x, int y);
+  void process_bombs(Player& pl);
+  void explode(int x, int y, Player& pl);
+  int add_rope(int x, int y, int ropes);  // Returns rope used
+
+// Asciiverse: saving
+  void save(std::ostream& out);
+  bool load(std::istream& in);
 
   void process_falling(Player& pl);
   void spawn_monsters (Player& pl);
@@ -56,9 +70,10 @@ public:
   int pathing_cost(Monster_id type, int curx, int cury, int x, int y);
 
   std::vector<Monster> monsters;
+  int heart_x, heart_y;  // Asciiverse: where the Heartstone lies
 
-private:
   std::vector< std::vector<Tile> > tiles;
+private:
   std::vector< std::string > messages;
   std::vector<Point> falling;
   Tile null_tile;

@@ -22,6 +22,16 @@ enum Tile_id
   T_iron,
   T_copper,
 
+// Asciiverse: deeper ground, rope, and the goal at the bottom of the claim
+  T_stone,
+  T_silver,
+  T_gold,
+  T_ruby,
+  T_diamond,
+  T_heartstone,
+  T_bedrock,
+  T_rope,
+
   T_max
 };
 

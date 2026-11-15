@@ -1,4 +1,5 @@
 #include "player.h"
+#include "stringfunc.h"
 
 Player::Player()
 {
@@ -7,6 +8,8 @@ Player::Player()
 
   cash = 0;
   deepest_point = 12;
+  has_heart = false;
+  kills = 0;
 
 //                                         Lev Price %Icr Amount bought
   equipment[E_stamina]  = Equipment_status(200, 200,  50, 50);
@@ -115,7 +118,14 @@ bool Player::move(Map* map, int movex, int movey)
   for (int i = 0; !found_monster && i < map->monsters.size(); i++) {
     Monster* mon = &(map->monsters[i]);
     if (movex == mon->posx && movey == mon->posy) {
-      mon->take_damage( get_damage() );
+      // Asciiverse: the sword is your pickaxe arm; say what happened
+      mon->take_damage( get_damage() * 3 );
+      if (mon->dead) {
+        kills++;
+        map->add_msg("You kill the " + monster_name(mon->id) + "!");
+      } else {
+        map->add_msg("You hit the " + monster_name(mon->id) + ".");
+      }
       found_monster = true;
     }
   }
@@ -192,20 +202,35 @@ bool Player::move(Map* map, int movex, int movey)
 
 bool Player::fall_if_needed(Map* map)
 {
-  if (map->get_tile_id(posx, posy) == T_grass) {
-    return false;
+// Asciiverse: fall straight down until something holds you, and a long
+// fall hurts: four tiles are free, every tile after that costs health.
+  int distance = 0;
+  while (true) {
+    if (map->get_tile_id(posx, posy) == T_grass) {
+      break;
+    }
+    if (map->get_tile_data(posx, posy)->climb_cost > 0) {
+      break;  // Holding on to a ladder or a rope
+    }
+    Tile_datum* below = map->get_tile_data(posx, posy + 1);
+    if (below->blocks || below->climb_cost > 0) {
+      break;
+    }
+    if (map->monster_at(posx, posy + 1)) {
+      break;
+    }
+    posy++;
+    distance++;
+    if (posy > deepest_point) {
+      deepest_point = posy;
+    }
   }
-  Tile_datum* below = map->get_tile_data(posx, posy + 1);
-  if (below->blocks || below->climb_cost > 0) {
-    return false;
+  if (distance >= 5) {
+    int dam = (distance - 4) * 6;
+    map->add_msg("You fall " + itos(distance) + " tiles and land hard!");
+    take_damage(dam, "a fall");
   }
-  if (map->monster_at(posx, posy + 1)) {
-    return false;
-  }
-// TODO: Falling damage
-  move(map, posx, posy + 1);
-  fall_if_needed(map);
-  return true;
+  return distance > 0;
 }
 
 bool Player::use_stamina(int amount)
@@ -214,11 +239,25 @@ bool Player::use_stamina(int amount)
     equipment[E_stamina].current -= amount;
     return true;
   }
+// Asciiverse: out of stamina underground, every effort costs health.
+  if (posy > 12) {
+    equipment[E_stamina].current = 0;
+    take_damage(amount, "exhaustion");
+    return true;
+  }
   return false;
 }
 
-bool Player::take_damage(int amount)
+bool Player::dead()
 {
+  return max_stamina <= 0;
+}
+
+bool Player::take_damage(int amount, std::string cause)
+{
+  if (!cause.empty()) {
+    last_hurt = cause;
+  }
   max_stamina -= amount;
   if (equipment[E_stamina].current > max_stamina) {
     equipment[E_stamina].current = max_stamina;

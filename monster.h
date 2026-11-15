@@ -5,6 +5,7 @@
 #include "glyph.h"
 #include "geometry.h"
 #include <vector>
+#include <string>
 #include <cstdarg>  // For variadic constructor
 
 class Map;
@@ -16,8 +17,11 @@ enum Monster_id
   M_worm,
   M_cockroach,
   M_termite,
+  M_goblin,    // Asciiverse: goblins that dig for the same ore you do
   M_max
 };
+
+std::string monster_name(Monster_id id);  // Asciiverse
 
 struct Monster_type
 {
