@@ -550,7 +550,7 @@ long popup_getkey(const char *mes, ...)
  char buff[8192];
  vsprintf(buff, mes, ap);
  va_end(ap);
- std::string tmp = buff;
+ std::string tmp = strip_tags(buff);
  int width = 0;
  int height = 2;
  size_t pos = tmp.find('\n');
@@ -566,6 +566,7 @@ long popup_getkey(const char *mes, ...)
  width += 2;
  if (height > 25)
   height = 25;
+ if (width > 80) width = 80;
  Window w(int((80 - width) / 2), int((25 - height) / 2), width, height + 1);
  w.outline();
  tmp = buff;
@@ -593,7 +594,7 @@ bool query_yn(const char *mes, ...)
  char buff[8192];
  vsprintf(buff, mes, ap);
  va_end(ap);
- std::string tmp = buff;
+ std::string tmp = strip_tags(buff);
  int width = 0;
  int height = 2;
  size_t pos = tmp.find('\n');
@@ -609,6 +610,7 @@ bool query_yn(const char *mes, ...)
  width += 2;
  if (height > 25)
   height = 25;
+ if (width > 80) width = 80;
  Window w(int((80 - width) / 2), int((25 - height) / 2), width, height + 1);
  w.outline();
  tmp = buff;
@@ -680,7 +682,7 @@ void popup(const char *mes, ...)
  char buff[8192];
  vsprintf(buff, mes, ap);
  va_end(ap);
- std::string tmp = buff;
+ std::string tmp = strip_tags(buff);
  int width = 0;
  int height = 2;
  size_t pos = tmp.find('\n');
@@ -696,6 +698,7 @@ void popup(const char *mes, ...)
  width += 2;
  if (height > 25)
   height = 25;
+ if (width > 80) width = 80;
  Window w(int((80 - width) / 2), int((25 - height) / 2), width, height + 1);
  w.outline();
  tmp = buff;
